@@ -1,0 +1,125 @@
+---
+title: "02. Variance calc."
+output:
+  html_document:
+    df_print: paged
+---
+
+See the [paper](https://arxiv.org/pdf/1608.00060) when referred to in the comments. 
+
+This note tries to link the relevant parts for variance calculation between the package implementation and the paper (very rough, cannot guarantee correct)
+
+```{r}
+# Load libraries
+library(data.table)
+library(mlr3)
+library(mlr3learners)
+library(DoubleML)
+
+
+
+
+# Load dataset
+data = fetch_401k(return_type = "data.table", instrument = TRUE)
+
+# Define covariates
+features_base = c("age", "inc", "educ", "fsize", "marr", "twoearn", "db", "pira", "hown")
+
+
+set.seed(123)
+
+```
+
+
+```{r}
+# Fit the model
+
+# applying package
+# ------------------------------------
+
+
+# Prepare data for DoubleML
+data_dml_base = DoubleMLData$new(data,
+                                 y_col = "net_tfa",
+                                 d_cols = "e401",
+                                 x_cols = features_base)
+
+
+
+# Initialize LASSO learners
+lasso = lrn("regr.cv_glmnet", nfolds = 5, s = "lambda.min")
+lasso_class = lrn("classif.cv_glmnet", nfolds = 5, s = "lambda.min")
+
+
+
+# Initialize DoubleMLPLR model
+
+dml_plr_lasso_base_n_fold = DoubleMLPLR$new(data_dml_base, 
+                                            ml_l = lasso, 
+                                            ml_m = lasso_class, 
+                                            n_folds = 5,
+                                            apply_cross_fitting = TRUE) # to be able to compare without cross fitting (do not accept n_fold >2)
+
+# Fit the model
+dml_plr_lasso_base_n_fold$fit()
+
+# Display results
+dml_plr_lasso_base_n_fold$summary()
+```
+
+```{r}
+# check the std error (semi-manually)
+# ------------------------------------
+
+# paper sections that seem relevant
+
+# Section 2 (from p11)
+# * 2.2 (from p13)
+#   * equ. (2.7) - Neyman orthogonal score
+#   * equ. (2.8 - 2.10) - solution to the score function
+
+
+# Section 3
+# * 3.3 (from 28)
+#   * Theorem 3.3 (p30) - variance (search "and the approximate variance is", see the following line)
+#      * [psi below  ] psi(W; theta, ita) - corresponds to the psi below (from solving the score function)
+#      * [psi_a below] J_0 - assumption 3.3 (p28, search "is satisfied, for the Jacobian matrix", see the following line) - should be the first direvative of score function with respect to theta (?)
+
+
+
+# relevant package implementation
+# https://github.com/DoubleML/doubleml-for-r/blob/main/R/double_ml.R#L1562
+
+
+psi_a <- dml_plr_lasso_base_n_fold$.__enclos_env__$private$get__psi_a()
+psi <- dml_plr_lasso_base_n_fold$.__enclos_env__$private$get__psi()
+n_obs <- dml_plr_lasso_base_n_fold$data$n_obs
+
+
+# Apply cross-fitting check
+if (dml_plr_lasso_base_n_fold$apply_cross_fitting) {
+  scaling_factor <- n_obs
+} else {
+  # Without cross-fitting, extract test sample indices
+  smpls <- dml_plr_lasso_base_n_fold$.__enclos_env__$private$get__smpls()
+  test_ids <- smpls$test_ids
+  test_index <- test_ids[[1]]  # Use the first fold for simplicity
+  psi_a <- psi_a[test_index]
+  psi <- psi[test_index]
+  scaling_factor <- length(test_index)
+}
+
+
+
+# Compute the variance and standard error
+J <- mean(psi_a)  # Average of psi_a
+sigma2_hat <- mean(psi^2) / (J^2) / scaling_factor  # Variance estimate
+std_error <- sqrt(sigma2_hat)  # Standard error
+
+
+
+
+cat("Manually calculated standard error:", std_error, "\n")
+```
+
+
