@@ -329,7 +329,7 @@ for (i in seq_len(resampling_pred_lz$resampling$iters)) {
 linear_classification_2$predict_type <- "prob"
 
 task_cls_lz = TaskClassif$new(id = "ml_m", 
-                              backend = data %>% mutate(e401 = factor(e401)), 
+                              backend = data %>% mutate(e401 = factor(e401)) %>% select(-net_tfa), 
                               target = "e401",
                               positive = "1")
 
