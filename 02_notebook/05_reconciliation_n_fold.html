@@ -11,7 +11,7 @@
 
 
 
-<title>03. Reconciliation [a] - no cross-fitting</title>
+<title>05. Reconciliation [b] - with cross-fitting</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -1619,7 +1619,7 @@ display: none;
 
 
 
-<h1 class="title toc-ignore">03. Reconciliation [a] - no
+<h1 class="title toc-ignore">05. Reconciliation [b] - with
 cross-fitting</h1>
 
 </div>
@@ -1627,8 +1627,8 @@ cross-fitting</h1>
 
 <p><br />
 </p>
-<p>If we do a little experiment to use the barebone models from mlr3 to
-replicate what DML has done , where we use</p>
+<p>Continue with the little experiment to use the barebone models from
+mlr3 to replicate what DML has done , where we use</p>
 <ul>
 <li>logistic regression for predicting whether a customer is eligible
 for 401(k)</li>
@@ -1636,66 +1636,65 @@ for 401(k)</li>
 used standalone, with the same specification and sampling) for
 estimating the treatment parameter</li>
 </ul>
-<p>For simplicity, we set n_fold = 1 and apply_cross_fitting = FALSE for
-DML in this notebook as proof of concept</p>
+<p>This time we set n_fold = 3 and apply_cross_fitting = TRUE for DML in
+this notebook as proof of concept</p>
+<p>For more advanced sampling setup, see the <a href="https://docs.doubleml.org/stable/guide/resampling.html">documentation</a>.</p>
 <p><br />
-<br />
 </p>
-<div id="library-setup" class="section level3">
-<h3>Library &amp; setup</h3>
+<div id="setup" class="section level3">
+<h3>Setup</h3>
 <pre class="r"><code>library(DoubleML)
 library(mlr3)
 library(mlr3learners)
+library(ggplot2)
 library(tidyverse)</code></pre>
 <pre><code>## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
 ## ✔ dplyr     1.1.4     ✔ readr     2.1.5
 ## ✔ forcats   1.0.0     ✔ stringr   1.5.1
-## ✔ ggplot2   3.5.1     ✔ tibble    3.2.1
-## ✔ lubridate 1.9.3     ✔ tidyr     1.3.1
-## ✔ purrr     1.0.2     
+## ✔ lubridate 1.9.3     ✔ tibble    3.2.1
+## ✔ purrr     1.0.2     ✔ tidyr     1.3.1
 ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
 ## ✖ dplyr::filter() masks stats::filter()
 ## ✖ dplyr::lag()    masks stats::lag()
 ## ℹ Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all conflicts to become errors</code></pre>
-<pre class="r"><code># Prepare the data
+<pre class="r"><code># Set the logging threshold to &quot;warn&quot; to suppress info messages
+lgr::get_logger(&quot;mlr3&quot;)$set_threshold(&quot;warn&quot;)
+
+# Prepare the data
 data = fetch_401k(return_type = &quot;data.table&quot;)
 features_base = c(&quot;age&quot;, &quot;inc&quot;, &quot;educ&quot;, &quot;fsize&quot;, &quot;marr&quot;, &quot;twoearn&quot;, &quot;db&quot;, &quot;pira&quot;, &quot;hown&quot;)
-
 data_dml_base = DoubleMLData$new(data, y_col = &quot;net_tfa&quot;, d_cols = &quot;e401&quot;, x_cols = features_base)
 
-
 # Define linear regression learners for nuisance functions
-linear_regression = lrn(&quot;regr.lm&quot;)       # For g(X): E[Y | X]
-
-linear_classification = lrn(&quot;classif.log_reg&quot;)  # For m(X): E[D | X]</code></pre>
+linear_regression = lrn(&quot;regr.lm&quot;)     
+linear_classification = lrn(&quot;classif.log_reg&quot;)</code></pre>
 <p><br />
-<br />
 </p>
 </div>
 <div id="fitting-with-dml" class="section level3">
 <h3>Fitting with DML</h3>
-<pre class="r"><code># Initialize DML-PLR model without cross-fitting and with n_folds = 1
-dml_plr_linear = DoubleMLPLR$new(
+<pre class="r"><code>n_fold &lt;- 3
+n_rep &lt;- 1
+n_obs &lt;- nrow(data_dml_base$data)
+
+set.seed(123)
+dml_linear &lt;- DoubleMLPLR$new(
   data_dml_base,
   ml_l = linear_regression,    # Outcome nuisance function
   ml_m = linear_classification, # Treatment nuisance function
-  n_folds = 1,                 # No folds (use entire data)
-  apply_cross_fitting = FALSE  # Disable cross-fitting
+  n_folds = n_fold,                 # No folds (use entire data)
+  apply_cross_fitting = TRUE  
 )
 
-# Fit the model
-dml_plr_linear$fit()</code></pre>
-<pre><code>## INFO  [15:04:32.780] [mlr3] Applying learner &#39;regr.lm&#39; on task &#39;nuis_l&#39; (iter 1/1)
-## INFO  [15:04:32.948] [mlr3] Applying learner &#39;classif.log_reg&#39; on task &#39;nuis_m&#39; (iter 1/1)</code></pre>
-<pre class="r"><code># Display results
-dml_plr_linear$summary()</code></pre>
+
+dml_linear$fit()
+dml_linear$summary()</code></pre>
 <pre><code>## Estimates and significance testing of the effect of target variables
 ##      Estimate. Std. Error t value Pr(&gt;|t|)    
-## e401      6109       1462   4.179 2.93e-05 ***
+## e401      6132       1465   4.186 2.84e-05 ***
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
 <p><br />
-<br />
 </p>
 </div>
 <div id="replicating-dml-with-mlr3-only" class="section level3">
@@ -1709,57 +1708,92 @@ script</a></li>
 <li><a href="https://github.com/DoubleML/doubleml-for-r/blob/main/R/helper.R">helper
 script</a></li>
 </ul>
-<pre class="r"><code># Define the learners for outcome and treatment models - same as what we used for DML
-
-linear_regression_2 = lrn(&quot;regr.lm&quot;)  # Outcome model: ml_l
+<p><br />
+</p>
+<p>Model setup</p>
+<pre class="r"><code>linear_regression_2 = lrn(&quot;regr.lm&quot;)  # Outcome model: ml_l
 linear_classification_2 = lrn(&quot;classif.log_reg&quot;)  # Treatment model: ml_g
 
 # note test and train prediction will be the same for n_fold = 1 and apply_cross_fitting = FALSE
 linear_regression_2$predict_sets &lt;- c(&quot;test&quot;, &quot;train&quot;)
-linear_classification_2$predict_type &lt;- &quot;prob&quot;
+linear_classification_2$predict_type &lt;- &quot;prob&quot;</code></pre>
+<p><br />
+</p>
+<p>Sample split</p>
+<pre class="r"><code>set.seed(123)
+dummy_task = Task$new(&quot;dummy_resampling&quot;, 
+                      &quot;regr&quot;, 
+                      data_dml_base$data)
+
+dummy_resampling_scheme = rsmp(&quot;repeated_cv&quot;,
+                               folds = n_fold,
+                               repeats = n_rep)$instantiate(dummy_task)
+
+train_ids = lapply(
+  1:(n_fold * n_rep),
+  function(x) dummy_resampling_scheme$train_set(x))
 
 
+test_ids = lapply(
+  1:(n_fold * n_rep),
+  function(x) dummy_resampling_scheme$test_set(x))
 
-# Define task for outcome and treatment
 
-# for n_fold = 1 and apply_cross_fitting = FALSE, train and test samples should both be the full sample
-train_ids &lt;- list(seq(1, dim(data)[1]))
-test_ids &lt;- list(seq(1, dim(data)[1]))</code></pre>
+smpls = lapply(1:n_rep, function(i_repeat) {
+  list(
+    train_ids = train_ids[((i_repeat - 1) * n_fold + 1):
+                            (i_repeat * n_fold)],
+    test_ids = test_ids[((i_repeat - 1) * n_fold + 1):
+                          (i_repeat * n_fold)])
+})
+
+
+train_ids &lt;- smpls[[1]][[&#39;train_ids&#39;]]
+test_ids &lt;- smpls[[1]][[&#39;test_ids&#39;]]</code></pre>
 <p><br />
 </p>
 <div id="train-the-regression-model" class="section level4">
-<h4><em>Train the regression model</em></h4>
+<h4>Train the regression model</h4>
 <pre class="r"><code>task_regr = TaskRegr$new(
   id = &#39;ml_l&#39;, 
   backend = data %&gt;%
     select(-e401),  # remember to remove the treatment variable
   target = &quot;net_tfa&quot;
-  )
-
+)
 
 resampling_smpls_regr &lt;- rsmp(&quot;custom&quot;)$instantiate(
   task_regr, 
   train_ids,
   test_ids
-  )
+)
 
 resampling_pred_regr &lt;- resample(
   task_regr, 
   linear_regression_2, 
   resampling_smpls_regr,
   store_models = TRUE
-  )</code></pre>
-<pre><code>## INFO  [15:04:33.194] [mlr3] Applying learner &#39;regr.lm&#39; on task &#39;ml_l&#39; (iter 1/1)</code></pre>
-<pre class="r"><code>l_hat &lt;- resampling_pred_regr$prediction(&#39;train&#39;)$response
+)
+
+
+# gather predictions, different with cross-fitting
+l_hat &lt;- rep(NA_real_, n_obs)
+#if (testR6(obj_resampling, classes = &quot;ResampleResult&quot;)) {
+resampling_pred_regr = list(resampling_pred_regr)
+#}
+n_obj_rsmp_regr = length(resampling_pred_regr)
+for (i_obj_rsmp in 1:n_obj_rsmp_regr) {
+  f_hat = as.data.table(resampling_pred_regr[[i_obj_rsmp]]$prediction(&quot;test&quot;))
+  l_hat[f_hat[[&#39;row_ids&#39;]]] = f_hat[[&#39;response&#39;]]
+}
 
 l_hat[1:10]</code></pre>
-<pre><code>##  [1]  -2280.039   7895.089 -23568.159  25354.314   2114.695  42301.751
-##  [7]   8197.827  -2839.498  56143.606  11417.475</code></pre>
+<pre><code>##  [1]  -2762.767   7333.299 -25361.782  24678.546   1912.378  43776.215
+##  [7]   5276.051  -3828.374  55388.298  11283.277</code></pre>
 <p><br />
 </p>
 </div>
 <div id="train-the-classification-model" class="section level4">
-<h4><em>Train the classification model</em></h4>
+<h4>Train the classification model</h4>
 <pre class="r"><code>task_cls = TaskClassif$new(
   id = &quot;ml_m&quot;, 
   backend = data %&gt;% 
@@ -1767,35 +1801,46 @@ l_hat[1:10]</code></pre>
     select(-net_tfa), 
   target = &quot;e401&quot;,
   positive = &quot;1&quot;
-  )
-
+)
 
 resampling_smpls_cls &lt;- rsmp(&quot;custom&quot;)$instantiate(
   task_cls, 
   train_ids,
   test_ids
-  )
+)
 
 resampling_pred_cls &lt;- resample(
   task_cls, 
   linear_classification_2, 
   resampling_smpls_cls,
   store_models = TRUE
-  )</code></pre>
-<pre><code>## INFO  [15:04:33.297] [mlr3] Applying learner &#39;classif.log_reg&#39; on task &#39;ml_m&#39; (iter 1/1)</code></pre>
-<pre class="r"><code>m_hat &lt;- as.data.table( resampling_pred_cls$prediction()) %&gt;% select(`prob.1`) %&gt;% unlist() %&gt;% unname()
+)
+
+
+# gather predictions
+m_hat &lt;- rep(NA_real_, n_obs)
+#if (testR6(obj_resampling, classes = &quot;ResampleResult&quot;)) {
+resampling_pred_cls = list(resampling_pred_cls)
+#}
+n_obj_rsmp_cls = length(resampling_pred_cls)
+for (i_obj_rsmp in 1:n_obj_rsmp_cls) {
+  f_hat = as.data.table(resampling_pred_cls[[i_obj_rsmp]]$prediction(&quot;test&quot;))
+  m_hat[f_hat[[&#39;row_ids&#39;]]] = f_hat[[&#39;prob.1&#39;]]
+}
 
 m_hat[1:10]</code></pre>
-<pre><code>##  [1] 0.1691088 0.2918707 0.2836170 0.4086347 0.2489320 0.3420235 0.3134366
-##  [8] 0.1638010 0.7473114 0.3575218</code></pre>
+<pre><code>##  [1] 0.1742076 0.2947843 0.2737085 0.4154500 0.2630140 0.3376550 0.3082713
+##  [8] 0.1592666 0.7381885 0.3546276</code></pre>
 <p><br />
 </p>
 </div>
 </div>
 <div id="compose-required-stats" class="section level3">
 <h3>Compose required stats</h3>
-<pre class="r"><code>d &lt;- data$e401
-y &lt;- data$net_tfa
+<pre class="r"><code># treatment effect estimate
+d &lt;- data_dml_base$data$e401
+y &lt;- data_dml_base$data$net_tfa
+
 
 # score_elements function
 
@@ -1811,10 +1856,13 @@ psi_b &lt;- v_hat * u_hat
 theta = -mean(psi_b) / mean(psi_a)
 
 print(paste0(&#39;Treatment effect estimate: &#39;, theta))</code></pre>
-<pre><code>## [1] &quot;Treatment effect estimate: 6109.30962201765&quot;</code></pre>
-<pre class="r"><code>psi &lt;- psi_a * theta + psi_b
+<pre><code>## [1] &quot;Treatment effect estimate: 6132.30738901763&quot;</code></pre>
+<pre class="r"><code># variance calc
 
-var_scaling_factor &lt;- length(test_ids[[1]])
+psi &lt;- psi_a * theta + psi_b
+
+# note that when applying cross fitting, the scaling factor is n_obs, otherwise = test sample size
+var_scaling_factor &lt;- n_obs 
 
 J &lt;- mean(psi_a)
 
@@ -1823,7 +1871,7 @@ sigma2_hat &lt;- mean(psi^2) / (J^2) / var_scaling_factor
 std_err &lt;- sqrt(sigma2_hat)
 
 print(paste0(&#39;Standard error: &#39;, std_err))</code></pre>
-<pre><code>## [1] &quot;Standard error: 1462.01573204274&quot;</code></pre>
+<pre><code>## [1] &quot;Standard error: 1464.97498334879&quot;</code></pre>
 </div>
 
 

@@ -1,17 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My GitHub Pages Site</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documentation Viewer</title>
+  <style>
+    /* GitHub Light Theme Colors */
+    body {
+      display: flex;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      color: #24292f; /* Text color */
+      background-color: #ffffff; /* Background color */
+    }
+
+    #sidebar {
+      width: 20%;
+      background-color: #f6f8fa; /* Sidebar background */
+      padding: 15px;
+      border-right: 1px solid #d0d7de; /* Subtle border */
+    }
+
+    #sidebar h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #57606a;
+      margin-bottom: 10px;
+    }
+
+    #sidebar a {
+      display: block;
+      padding: 8px;
+      margin: 5px 0;
+      text-decoration: none;
+      color: #0969da; /* Link color */
+      background-color: #ffffff; /* Default link background */
+      border-radius: 6px;
+      border: 1px solid transparent;
+    }
+
+    #sidebar a:hover {
+      background-color: #ddf4ff; /* Hover background */
+      color: #0550ae; /* Hover text color */
+      border-color: #0969da; /* Hover border */
+    }
+
+    #main {
+      flex: 1;
+      padding: 20px;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100vh;
+      border: none;
+    }
+  </style>
 </head>
 <body>
-    <h1>Welcome to My GitHub Pages Site</h1>
-    <p>This is a simple HTML page hosted on GitHub Pages.</p>
-    <ul>
-        <li><a href="01_sample_code_run.html">01 - replication of financial asset analysis example</a></li>
-        <li><a href="02_variance_calc.html">02 - variance calculation in DML package</a></li>
-        <li><a href="03_reconciliation.html">03 - mlr 3 to replicate DML implementation (no cross-fitting)</a></li>
-    </ul>
+  <div id="sidebar">
+    <h3>Navigation</h3>
+    <div id="links"></div>
+  </div>
+  <div id="main">
+    <iframe id="content" src=""></iframe>
+  </div>
+
+  <script>
+    // List of your HTML files in the docs folder
+    const htmlFiles = [
+      '01_sample_code_run.html',
+      '02_variance_calc.html',
+      '03_reconciliation.html', // Add your file names here
+      '04_n_fold_fitting.html',
+      '05_reconciliation_n_fold.html'
+    ];
+
+    const linksContainer = document.getElementById('links');
+    const iframe = document.getElementById('content');
+
+    // Generate sidebar links dynamically
+    htmlFiles.forEach((file, index) => {
+      const link = document.createElement('a');
+      link.href = "#";
+      link.textContent = file;
+      link.onclick = () => {
+        iframe.src = file;
+        return false;
+      };
+      linksContainer.appendChild(link);
+
+      // Load the first page as default
+      if (index === 0) {
+        iframe.src = file;
+      }
+    });
+  </script>
 </body>
 </html>

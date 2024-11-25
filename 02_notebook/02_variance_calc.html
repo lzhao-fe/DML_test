@@ -1624,50 +1624,39 @@ display: none;
 </div>
 
 
-<p>See the <a href="https://arxiv.org/pdf/1608.00060">paper</a> when
-referred to in the comments.</p>
 <p>This note tries to link the relevant parts for variance calculation
 between the package implementation and the paper (very rough, cannot
 guarantee correct)</p>
+<div id="set-up" class="section level3">
+<h3>Set-up</h3>
 <pre class="r"><code># Load libraries
 library(data.table)
 library(mlr3)
 library(mlr3learners)
 library(DoubleML)
 
-
-
-
 # Load dataset
 data = fetch_401k(return_type = &quot;data.table&quot;, instrument = TRUE)
-
 # Define covariates
 features_base = c(&quot;age&quot;, &quot;inc&quot;, &quot;educ&quot;, &quot;fsize&quot;, &quot;marr&quot;, &quot;twoearn&quot;, &quot;db&quot;, &quot;pira&quot;, &quot;hown&quot;)
 
-
 set.seed(123)</code></pre>
-<pre class="r"><code># Fit the model
-
-# applying package
-# ------------------------------------
-
-
-# Prepare data for DoubleML
+<p><br />
+</p>
+</div>
+<div id="dml-estimation" class="section level3">
+<h3>DML estimation</h3>
+<pre class="r"><code># Prepare data for DoubleML
 data_dml_base = DoubleMLData$new(data,
                                  y_col = &quot;net_tfa&quot;,
                                  d_cols = &quot;e401&quot;,
                                  x_cols = features_base)
 
-
-
 # Initialize LASSO learners
 lasso = lrn(&quot;regr.cv_glmnet&quot;, nfolds = 5, s = &quot;lambda.min&quot;)
 lasso_class = lrn(&quot;classif.cv_glmnet&quot;, nfolds = 5, s = &quot;lambda.min&quot;)
 
-
-
 # Initialize DoubleMLPLR model
-
 dml_plr_lasso_base_n_fold = DoubleMLPLR$new(data_dml_base, 
                                             ml_l = lasso, 
                                             ml_m = lasso_class, 
@@ -1676,16 +1665,16 @@ dml_plr_lasso_base_n_fold = DoubleMLPLR$new(data_dml_base,
 
 # Fit the model
 dml_plr_lasso_base_n_fold$fit()</code></pre>
-<pre><code>## INFO  [19:29:16.226] [mlr3] Applying learner &#39;regr.cv_glmnet&#39; on task &#39;nuis_l&#39; (iter 1/5)
-## INFO  [19:29:17.738] [mlr3] Applying learner &#39;regr.cv_glmnet&#39; on task &#39;nuis_l&#39; (iter 2/5)
-## INFO  [19:29:18.516] [mlr3] Applying learner &#39;regr.cv_glmnet&#39; on task &#39;nuis_l&#39; (iter 3/5)
-## INFO  [19:29:18.657] [mlr3] Applying learner &#39;regr.cv_glmnet&#39; on task &#39;nuis_l&#39; (iter 4/5)
-## INFO  [19:29:18.793] [mlr3] Applying learner &#39;regr.cv_glmnet&#39; on task &#39;nuis_l&#39; (iter 5/5)
-## INFO  [19:29:19.035] [mlr3] Applying learner &#39;classif.cv_glmnet&#39; on task &#39;nuis_m&#39; (iter 1/5)
-## INFO  [19:29:19.674] [mlr3] Applying learner &#39;classif.cv_glmnet&#39; on task &#39;nuis_m&#39; (iter 2/5)
-## INFO  [19:29:20.065] [mlr3] Applying learner &#39;classif.cv_glmnet&#39; on task &#39;nuis_m&#39; (iter 3/5)
-## INFO  [19:29:20.653] [mlr3] Applying learner &#39;classif.cv_glmnet&#39; on task &#39;nuis_m&#39; (iter 4/5)
-## INFO  [19:29:20.962] [mlr3] Applying learner &#39;classif.cv_glmnet&#39; on task &#39;nuis_m&#39; (iter 5/5)</code></pre>
+<pre><code>## INFO  [15:20:29.483] [mlr3] Applying learner &#39;regr.cv_glmnet&#39; on task &#39;nuis_l&#39; (iter 1/5)
+## INFO  [15:20:30.898] [mlr3] Applying learner &#39;regr.cv_glmnet&#39; on task &#39;nuis_l&#39; (iter 2/5)
+## INFO  [15:20:31.645] [mlr3] Applying learner &#39;regr.cv_glmnet&#39; on task &#39;nuis_l&#39; (iter 3/5)
+## INFO  [15:20:31.789] [mlr3] Applying learner &#39;regr.cv_glmnet&#39; on task &#39;nuis_l&#39; (iter 4/5)
+## INFO  [15:20:31.922] [mlr3] Applying learner &#39;regr.cv_glmnet&#39; on task &#39;nuis_l&#39; (iter 5/5)
+## INFO  [15:20:32.156] [mlr3] Applying learner &#39;classif.cv_glmnet&#39; on task &#39;nuis_m&#39; (iter 1/5)
+## INFO  [15:20:32.785] [mlr3] Applying learner &#39;classif.cv_glmnet&#39; on task &#39;nuis_m&#39; (iter 2/5)
+## INFO  [15:20:33.128] [mlr3] Applying learner &#39;classif.cv_glmnet&#39; on task &#39;nuis_m&#39; (iter 3/5)
+## INFO  [15:20:33.495] [mlr3] Applying learner &#39;classif.cv_glmnet&#39; on task &#39;nuis_m&#39; (iter 4/5)
+## INFO  [15:20:33.850] [mlr3] Applying learner &#39;classif.cv_glmnet&#39; on task &#39;nuis_m&#39; (iter 5/5)</code></pre>
 <pre class="r"><code># Display results
 dml_plr_lasso_base_n_fold$summary()</code></pre>
 <pre><code>## Estimates and significance testing of the effect of target variables
@@ -1693,28 +1682,39 @@ dml_plr_lasso_base_n_fold$summary()</code></pre>
 ## e401      6047       1461   4.138  3.5e-05 ***
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p><br />
+</p>
+</div>
+<div id="variance-calculation" class="section level3">
+<h3>Variance calculation</h3>
+<p><br />
+</p>
+<p>See <a href="https://arxiv.org/pdf/1608.00060">paper</a> for sections
+that might be relevant</p>
+<ul>
+<li>Section 2.2 (from p13)
+<ul>
+<li>equ. (2.7) - Neyman orthogonal score</li>
+<li>equ. (2.8 - 2.10) - solution to the score function</li>
+</ul></li>
+<li>Section 3.3 (from 28)
+<ul>
+<li>Theorem 3.3 (p30) - variance (search “and the approximate variance
+is”, see the following line)
+<ul>
+<li>[psi below ] psi(W; theta, ita) - corresponds to the psi below (from
+solving the score function)</li>
+<li>[psi_a below] J_0 - assumption 3.3 (p28, search “is satisfied, for
+the Jacobian matrix”, see the following line) - should be the first
+direvative of score function with respect to theta (?)</li>
+</ul></li>
+</ul></li>
+</ul>
+<p><br />
+</p>
+<p>See GitHub implementation at <a href="https://github.com/DoubleML/doubleml-for-r/blob/main/R/double_ml.R#L1562">script</a></p>
 <pre class="r"><code># check the std error (semi-manually)
 # ------------------------------------
-
-# paper sections that seem relevant
-
-# Section 2 (from p11)
-# * 2.2 (from p13)
-#   * equ. (2.7) - Neyman orthogonal score
-#   * equ. (2.8 - 2.10) - solution to the score function
-
-
-# Section 3
-# * 3.3 (from 28)
-#   * Theorem 3.3 (p30) - variance (search &quot;and the approximate variance is&quot;, see the following line)
-#      * [psi below  ] psi(W; theta, ita) - corresponds to the psi below (from solving the score function)
-#      * [psi_a below] J_0 - assumption 3.3 (p28, search &quot;is satisfied, for the Jacobian matrix&quot;, see the following line) - should be the first direvative of score function with respect to theta (?)
-
-
-
-# relevant package implementation
-# https://github.com/DoubleML/doubleml-for-r/blob/main/R/double_ml.R#L1562
-
 
 psi_a &lt;- dml_plr_lasso_base_n_fold$.__enclos_env__$private$get__psi_a()
 psi &lt;- dml_plr_lasso_base_n_fold$.__enclos_env__$private$get__psi()
@@ -1734,18 +1734,14 @@ if (dml_plr_lasso_base_n_fold$apply_cross_fitting) {
   scaling_factor &lt;- length(test_index)
 }
 
-
-
 # Compute the variance and standard error
 J &lt;- mean(psi_a)  # Average of psi_a
 sigma2_hat &lt;- mean(psi^2) / (J^2) / scaling_factor  # Variance estimate
 std_error &lt;- sqrt(sigma2_hat)  # Standard error
 
-
-
-
 cat(&quot;Manually calculated standard error:&quot;, std_error, &quot;\n&quot;)</code></pre>
 <pre><code>## Manually calculated standard error: 1461.263</code></pre>
+</div>
 
 
 

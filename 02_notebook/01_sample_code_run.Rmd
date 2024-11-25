@@ -5,18 +5,22 @@ output:
     df_print: paged
 ---
 
+\
+
 This is adapted from the package documentation example [Financial Asset Analysis](https://docs.doubleml.org/stable/examples/R_double_ml_pension.html).
 
 This notebook tries the DML package with partially linear regression model with lasso, tree based models to estimate nuisance function. It also compares with a straight OLS run for the same set of variables.
 
-Without further adjusting the model specifications given by the example page, OLS can give very different estimate and lower standard errors than (some of) DML's output, but the DML-Lassos' standard errors may not differ that much/ be much lower than other algo.
+Without further adjusting the model specifications given by the example page, OLS can give very different estimate and lower standard errors than (some of) DML's output. DML estimates (for this example) seem to have close-ish standard errors.
+
+\
+\
 
 ```{r}
 
 #install.packages(c('DoubleML', 'mlr3', 'mlr3learners', 'data.table', 'ggplot2', 
 #                   'glmnet', 'ranger', 'rpart', 'xgboost', 'tidyverse))
 
-# 
 library(DoubleML)
 library(mlr3)
 library(mlr3learners)
@@ -35,10 +39,11 @@ data = fetch_401k(return_type = "data.table", instrument = TRUE)
 ```
 
 
+\
 
+[Given in the example] Among the 9,915 individuals, 3,682 are eligible to participate in the program
 
 ```{r}
-# [Given in the example] Among the 9,915 individuals, 3,682 are eligible to participate in the program
 
 hist_e401 = ggplot(data, aes(x = e401, fill = factor(e401))) +
   geom_bar() + theme_minimal() +
@@ -50,12 +55,12 @@ hist_e401
 
 ```
 
+\
 
-
-
+[Given in the example] Eligibility is highly associated with financial wealth
 
 ```{r}
-# [Given in the example] Eligibility is highly associated with financial wealth
+
 dens_net_tfa = ggplot(data, aes(x = net_tfa, color = factor(e401), fill = factor(e401)) ) +
   geom_density() + xlim(c(-20000, 150000)) +
   facet_wrap(.~e401)  + theme_minimal() +
@@ -64,14 +69,20 @@ dens_net_tfa = ggplot(data, aes(x = net_tfa, color = factor(e401), fill = factor
 dens_net_tfa
 ```
 
+\
+
+[Given in the example] As a first estimate, we calculate the unconditional average predictive effect (APE) of 401(k) eligibility on accumulated assets. This effect corresponds to the average treatment effect if 401(k) eligibility would be assigned to individuals in an entirely randomized way.
+
 
 ```{r}
-# [Given in the example] As a first estimate, we calculate the unconditional average predictive effect (APE) of 401(k) eligibility on accumulated assets. This effect corresponds to the average treatment effect if 401(k) eligibility would be assigned to individuals in an entirely randomized way.
-
 APE_e401_uncond = data[e401==1, mean(net_tfa)] - data[e401==0, mean(net_tfa)]
 round(APE_e401_uncond, 2)
 ```
 
+\
+\
+
+### Set up dataset
 
 ```{r}
 # [Given in the example]
@@ -112,9 +123,22 @@ data_dml_flex
 ```
 
 
+\
+\
+
+### DML estimations - Partially Linear Regression Model (PLR)
+
+\
+
+#### LASSO 
+
+\
+
+Use base specification
+
 ```{r}
-# [Given in the example]
-# Partially Linear Regression Model (PLR)
+
+#[Given in the example]
 set.seed(123)
 
 # Lasso
@@ -133,6 +157,10 @@ dml_plr_lasso_base$fit()
 dml_plr_lasso_base$summary()
 ```
 
+\
+
+Use flex (with polynomial) specification
+
 ```{r}
 # [Given in the example]
 # Initialize learners
@@ -148,10 +176,13 @@ dml_plr_lasso_flex$fit()
 dml_plr_lasso_flex$summary()
 ```
 
+\
+
+#### Random Forest
 
 ```{r}
 # [Given in the example]
-# Random Forest
+
 randomForest = lrn("regr.ranger", max.depth = 7,
                    mtry = 3, min.node.size = 3)
 randomForest_class = lrn("classif.ranger", max.depth = 5,
@@ -166,11 +197,13 @@ dml_plr_forest$fit()
 dml_plr_forest$summary()
 ```
 
+\
 
+#### Trees
 
 ```{r}
 # [Given in the example]
-# Trees
+
 trees = lrn("regr.rpart", cp = 0.0047, minsplit = 203)
 trees_class = lrn("classif.rpart", cp = 0.0042, minsplit = 104)
 
@@ -183,10 +216,13 @@ dml_plr_tree$fit()
 dml_plr_tree$summary()
 ```
 
+\
+
+#### Boosted trees
 
 ```{r}
 # [Given in the example]
-# Boosted trees
+
 boost = lrn("regr.xgboost",
             objective = "reg:squarederror",
             eta = 0.1, nrounds = 35)
@@ -202,6 +238,40 @@ dml_plr_boost = DoubleMLPLR$new(data_dml_base,
 dml_plr_boost$fit()
 dml_plr_boost$summary()
 ```
+
+\
+
+#### Linear model
+
+```{r}
+
+
+# Define linear regression learners for nuisance functions
+linear_regression = lrn("regr.lm")       
+linear_classification = lrn("classif.log_reg")  
+
+set.seed(123)
+# Initialize DML-PLR model without cross-fitting and with n_folds = 1
+dml_plr_linear <- DoubleMLPLR$new(
+  data_dml_base,
+  ml_l = linear_regression,    # Outcome nuisance function
+  ml_m = linear_classification, # Treatment nuisance function
+  n_folds = 3             # No folds (use entire data)
+)
+
+# Fit the model
+dml_plr_linear$fit()
+# Display results
+dml_plr_linear$summary()
+
+
+
+```
+
+\
+\
+
+### Plain OLS
 
 ```{r}
 # If fitting an OLS directly
@@ -232,37 +302,50 @@ ols_coefficient <-  ols_model$coefficients[which(names( ols_model$coefficients) 
 ols_se <- model_summary$coefficients[which(rownames(model_summary$coefficients) == required_row_name), 
                                      which(colnames(model_summary$coefficients)== 'Std. Error')]
 
-# /////
+model_summary
+
+```
+
+\
+\
+
+### Summary of results
+
+
+```{r}
+
+# [Adapted from the example]
+
+# Put things together
 
 confints = rbind(ols_d_confint,
+                 dml_plr_linear$confint(), 
                  dml_plr_lasso_base$confint(), dml_plr_lasso_flex$confint(),
                  dml_plr_forest$confint(),
                  dml_plr_tree$confint(), dml_plr_boost$confint())
 
 estimates = c(ols_coefficient,
+              dml_plr_linear$coef,
               dml_plr_lasso_base$coef, dml_plr_lasso_flex$coef,
               dml_plr_forest$coef,
               dml_plr_tree$coef, dml_plr_boost$coef)
 
 std_err <- c(ols_se,
+             dml_plr_linear$se,
              dml_plr_lasso_base$se, dml_plr_lasso_flex$se,
              dml_plr_forest$se,
              dml_plr_tree$se, dml_plr_boost$se)
 
-model_summary
-```
 
 
-
-```{r}
-# [Adapted from the example]
 # Summary
 
-result_plr = data.table("model" = c('OLS', "PLR", "PLR", 
+result_plr = data.table("model" = c('OLS', 
+                                    "PLR", "PLR", "PLR", 
                                     "PLR", "PLR", "PLR"),
-                        "ML" = c('1. OLS',
-                                 "2. glmnet_base", "3. glmnet_flex", 
-                                 "4. ranger", "5. rpart", "6. xgboost"),
+                        "ML" = c('1. plain_ols',
+                                 "2. linear_logistic",  "3. lasso_base", "4. lasso_flex", 
+                                 "5. random_forest", "6. tree", "7. boost_tree"),
                         "Estimate" = estimates,
                         'Std. Error' = std_err,
                         "lower" = confints[,1],
@@ -275,14 +358,19 @@ result_plr
 # [Adapted from the example]
 # Plot
 
+
 g_ci = ggplot(result_plr, aes(x = ML, y = Estimate, color = ML)) +
   geom_point() +
   geom_errorbar(aes(ymin = lower, ymax = upper, color = ML))  +
   geom_hline(yintercept = 0, color = "grey") +
-  theme_minimal() + ylab("Coefficients and 0.95- confidence interval") +
-  xlab("") +
+  theme_minimal() + 
+  labs(x = 'Algorithm used',
+       subtitle = "DML cross fit with 3 folds") +
+  ggtitle("Coefficients and 0.95 Confidence Interval with PLR") + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none",
-        text = element_text(size = 20))
+        text = element_text(size = 12), # Adjust text sizes for the overall plot
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
 
 g_ci
 ```

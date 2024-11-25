@@ -1625,18 +1625,24 @@ cross-fitting</h1>
 </div>
 
 
+<p><br />
+</p>
 <p>If we do a little experiment to use the barebone models from mlr3 to
 replicate what DML has done , where we use</p>
 <ul>
 <li>logistic regression for predicting whether a customer is eligible
 for 401(k)</li>
 <li>a linear model (which should get the same result as plain OLS if
-used standalone) for estimating the treatment parameter</li>
+used standalone, with the same specification and sampling) for
+estimating the treatment parameter</li>
 </ul>
 <p>For simplicity, we set n_fold = 1 and apply_cross_fitting = FALSE for
 DML in this notebook as proof of concept</p>
-<div id="library-setup" class="section level2">
-<h2>Library &amp; setup</h2>
+<p><br />
+<br />
+</p>
+<div id="library-setup" class="section level3">
+<h3>Library &amp; setup</h3>
 <pre class="r"><code>library(DoubleML)
 library(mlr3)
 library(mlr3learners)
@@ -1662,9 +1668,12 @@ data_dml_base = DoubleMLData$new(data, y_col = &quot;net_tfa&quot;, d_cols = &qu
 linear_regression = lrn(&quot;regr.lm&quot;)       # For g(X): E[Y | X]
 
 linear_classification = lrn(&quot;classif.log_reg&quot;)  # For m(X): E[D | X]</code></pre>
+<p><br />
+<br />
+</p>
 </div>
-<div id="fitting-with-dml" class="section level2">
-<h2>Fitting with DML</h2>
+<div id="fitting-with-dml" class="section level3">
+<h3>Fitting with DML</h3>
 <pre class="r"><code># Initialize DML-PLR model without cross-fitting and with n_folds = 1
 dml_plr_linear = DoubleMLPLR$new(
   data_dml_base,
@@ -1676,8 +1685,8 @@ dml_plr_linear = DoubleMLPLR$new(
 
 # Fit the model
 dml_plr_linear$fit()</code></pre>
-<pre><code>## INFO  [09:35:06.034] [mlr3] Applying learner &#39;regr.lm&#39; on task &#39;nuis_l&#39; (iter 1/1)
-## INFO  [09:35:06.204] [mlr3] Applying learner &#39;classif.log_reg&#39; on task &#39;nuis_m&#39; (iter 1/1)</code></pre>
+<pre><code>## INFO  [15:04:32.780] [mlr3] Applying learner &#39;regr.lm&#39; on task &#39;nuis_l&#39; (iter 1/1)
+## INFO  [15:04:32.948] [mlr3] Applying learner &#39;classif.log_reg&#39; on task &#39;nuis_m&#39; (iter 1/1)</code></pre>
 <pre class="r"><code># Display results
 dml_plr_linear$summary()</code></pre>
 <pre><code>## Estimates and significance testing of the effect of target variables
@@ -1685,9 +1694,12 @@ dml_plr_linear$summary()</code></pre>
 ## e401      6109       1462   4.179 2.93e-05 ***
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p><br />
+<br />
+</p>
 </div>
-<div id="replicating-dml-with-mlr3-only" class="section level2">
-<h2>Replicating DML with mlr3 only</h2>
+<div id="replicating-dml-with-mlr3-only" class="section level3">
+<h3>Replicating DML with mlr3 only</h3>
 <p>Reference - GitHub repo</p>
 <ul>
 <li><a href="https://github.com/DoubleML/doubleml-for-r/blob/main/R/double_ml.R">double_ml
@@ -1713,8 +1725,10 @@ linear_classification_2$predict_type &lt;- &quot;prob&quot;
 # for n_fold = 1 and apply_cross_fitting = FALSE, train and test samples should both be the full sample
 train_ids &lt;- list(seq(1, dim(data)[1]))
 test_ids &lt;- list(seq(1, dim(data)[1]))</code></pre>
-<div id="train-the-regression-model" class="section level3">
-<h3>Train the regression model</h3>
+<p><br />
+</p>
+<div id="train-the-regression-model" class="section level4">
+<h4><em>Train the regression model</em></h4>
 <pre class="r"><code>task_regr = TaskRegr$new(
   id = &#39;ml_l&#39;, 
   backend = data %&gt;%
@@ -1735,15 +1749,17 @@ resampling_pred_regr &lt;- resample(
   resampling_smpls_regr,
   store_models = TRUE
   )</code></pre>
-<pre><code>## INFO  [09:35:06.442] [mlr3] Applying learner &#39;regr.lm&#39; on task &#39;ml_l&#39; (iter 1/1)</code></pre>
+<pre><code>## INFO  [15:04:33.194] [mlr3] Applying learner &#39;regr.lm&#39; on task &#39;ml_l&#39; (iter 1/1)</code></pre>
 <pre class="r"><code>l_hat &lt;- resampling_pred_regr$prediction(&#39;train&#39;)$response
 
 l_hat[1:10]</code></pre>
 <pre><code>##  [1]  -2280.039   7895.089 -23568.159  25354.314   2114.695  42301.751
 ##  [7]   8197.827  -2839.498  56143.606  11417.475</code></pre>
+<p><br />
+</p>
 </div>
-<div id="train-the-classification-model" class="section level3">
-<h3>Train the classification model</h3>
+<div id="train-the-classification-model" class="section level4">
+<h4><em>Train the classification model</em></h4>
 <pre class="r"><code>task_cls = TaskClassif$new(
   id = &quot;ml_m&quot;, 
   backend = data %&gt;% 
@@ -1766,12 +1782,15 @@ resampling_pred_cls &lt;- resample(
   resampling_smpls_cls,
   store_models = TRUE
   )</code></pre>
-<pre><code>## INFO  [09:35:06.535] [mlr3] Applying learner &#39;classif.log_reg&#39; on task &#39;ml_m&#39; (iter 1/1)</code></pre>
+<pre><code>## INFO  [15:04:33.297] [mlr3] Applying learner &#39;classif.log_reg&#39; on task &#39;ml_m&#39; (iter 1/1)</code></pre>
 <pre class="r"><code>m_hat &lt;- as.data.table( resampling_pred_cls$prediction()) %&gt;% select(`prob.1`) %&gt;% unlist() %&gt;% unname()
 
 m_hat[1:10]</code></pre>
 <pre><code>##  [1] 0.1691088 0.2918707 0.2836170 0.4086347 0.2489320 0.3420235 0.3134366
 ##  [8] 0.1638010 0.7473114 0.3575218</code></pre>
+<p><br />
+</p>
+</div>
 </div>
 <div id="compose-required-stats" class="section level3">
 <h3>Compose required stats</h3>
@@ -1805,7 +1824,6 @@ std_err &lt;- sqrt(sigma2_hat)
 
 print(paste0(&#39;Standard error: &#39;, std_err))</code></pre>
 <pre><code>## [1] &quot;Standard error: 1462.01573204274&quot;</code></pre>
-</div>
 </div>
 
 

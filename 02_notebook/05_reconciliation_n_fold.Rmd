@@ -1,0 +1,253 @@
+---
+title: "05. Reconciliation [b] - with cross-fitting"
+output:
+  html_document:
+    df_print: paged
+---
+\
+
+Continue with the little experiment to use the barebone models from mlr3 to replicate what DML has done , where we use
+
+* logistic regression for predicting whether a customer is eligible for 401(k)
+* a linear model (which should get the same result as plain OLS if used standalone, with the same specification and sampling) for estimating the treatment parameter
+
+This time we set n_fold = 3 and apply_cross_fitting = TRUE for DML in this notebook as proof of concept
+
+For more advanced sampling setup, see the [documentation](https://docs.doubleml.org/stable/guide/resampling.html).
+
+\
+
+### Setup
+
+```{r}
+library(DoubleML)
+library(mlr3)
+library(mlr3learners)
+library(ggplot2)
+library(tidyverse)
+
+# Set the logging threshold to "warn" to suppress info messages
+lgr::get_logger("mlr3")$set_threshold("warn")
+
+# Prepare the data
+data = fetch_401k(return_type = "data.table")
+features_base = c("age", "inc", "educ", "fsize", "marr", "twoearn", "db", "pira", "hown")
+data_dml_base = DoubleMLData$new(data, y_col = "net_tfa", d_cols = "e401", x_cols = features_base)
+
+# Define linear regression learners for nuisance functions
+linear_regression = lrn("regr.lm")     
+linear_classification = lrn("classif.log_reg")
+
+```
+
+\
+
+### Fitting with DML
+
+```{r}
+n_fold <- 3
+n_rep <- 1
+n_obs <- nrow(data_dml_base$data)
+
+set.seed(123)
+dml_linear <- DoubleMLPLR$new(
+  data_dml_base,
+  ml_l = linear_regression,    # Outcome nuisance function
+  ml_m = linear_classification, # Treatment nuisance function
+  n_folds = n_fold,                 # No folds (use entire data)
+  apply_cross_fitting = TRUE  
+)
+
+
+dml_linear$fit()
+dml_linear$summary()
+```
+
+
+\
+
+### Replicating DML with mlr3 only
+
+Reference - GitHub repo
+
+* [double_ml script](https://github.com/DoubleML/doubleml-for-r/blob/main/R/double_ml.R)
+* [double_ml_plr script](https://github.com/DoubleML/doubleml-for-r/blob/main/R/double_ml_plr.R)
+* [helper script](https://github.com/DoubleML/doubleml-for-r/blob/main/R/helper.R)
+
+\
+
+Model setup
+
+```{r}
+linear_regression_2 = lrn("regr.lm")  # Outcome model: ml_l
+linear_classification_2 = lrn("classif.log_reg")  # Treatment model: ml_g
+
+# note test and train prediction will be the same for n_fold = 1 and apply_cross_fitting = FALSE
+linear_regression_2$predict_sets <- c("test", "train")
+linear_classification_2$predict_type <- "prob"
+
+```
+
+\
+
+Sample split
+
+```{r}
+set.seed(123)
+dummy_task = Task$new("dummy_resampling", 
+                      "regr", 
+                      data_dml_base$data)
+
+dummy_resampling_scheme = rsmp("repeated_cv",
+                               folds = n_fold,
+                               repeats = n_rep)$instantiate(dummy_task)
+
+train_ids = lapply(
+  1:(n_fold * n_rep),
+  function(x) dummy_resampling_scheme$train_set(x))
+
+
+test_ids = lapply(
+  1:(n_fold * n_rep),
+  function(x) dummy_resampling_scheme$test_set(x))
+
+
+smpls = lapply(1:n_rep, function(i_repeat) {
+  list(
+    train_ids = train_ids[((i_repeat - 1) * n_fold + 1):
+                            (i_repeat * n_fold)],
+    test_ids = test_ids[((i_repeat - 1) * n_fold + 1):
+                          (i_repeat * n_fold)])
+})
+
+
+train_ids <- smpls[[1]][['train_ids']]
+test_ids <- smpls[[1]][['test_ids']]
+```
+
+\
+
+#### Train the regression model
+
+```{r}
+task_regr = TaskRegr$new(
+  id = 'ml_l', 
+  backend = data %>%
+    select(-e401),  # remember to remove the treatment variable
+  target = "net_tfa"
+)
+
+resampling_smpls_regr <- rsmp("custom")$instantiate(
+  task_regr, 
+  train_ids,
+  test_ids
+)
+
+resampling_pred_regr <- resample(
+  task_regr, 
+  linear_regression_2, 
+  resampling_smpls_regr,
+  store_models = TRUE
+)
+
+
+# gather predictions, different with cross-fitting
+l_hat <- rep(NA_real_, n_obs)
+#if (testR6(obj_resampling, classes = "ResampleResult")) {
+resampling_pred_regr = list(resampling_pred_regr)
+#}
+n_obj_rsmp_regr = length(resampling_pred_regr)
+for (i_obj_rsmp in 1:n_obj_rsmp_regr) {
+  f_hat = as.data.table(resampling_pred_regr[[i_obj_rsmp]]$prediction("test"))
+  l_hat[f_hat[['row_ids']]] = f_hat[['response']]
+}
+
+l_hat[1:10]
+```
+
+\
+
+#### Train the classification model
+
+```{r}
+task_cls = TaskClassif$new(
+  id = "ml_m", 
+  backend = data %>% 
+    mutate(e401 = factor(e401)) %>%
+    select(-net_tfa), 
+  target = "e401",
+  positive = "1"
+)
+
+resampling_smpls_cls <- rsmp("custom")$instantiate(
+  task_cls, 
+  train_ids,
+  test_ids
+)
+
+resampling_pred_cls <- resample(
+  task_cls, 
+  linear_classification_2, 
+  resampling_smpls_cls,
+  store_models = TRUE
+)
+
+
+# gather predictions
+m_hat <- rep(NA_real_, n_obs)
+#if (testR6(obj_resampling, classes = "ResampleResult")) {
+resampling_pred_cls = list(resampling_pred_cls)
+#}
+n_obj_rsmp_cls = length(resampling_pred_cls)
+for (i_obj_rsmp in 1:n_obj_rsmp_cls) {
+  f_hat = as.data.table(resampling_pred_cls[[i_obj_rsmp]]$prediction("test"))
+  m_hat[f_hat[['row_ids']]] = f_hat[['prob.1']]
+}
+
+m_hat[1:10]
+```
+
+
+\
+
+### Compose required stats
+
+```{r}
+# treatment effect estimate
+d <- data_dml_base$data$e401
+y <- data_dml_base$data$net_tfa
+
+
+# score_elements function
+
+v_hat  <-  d - m_hat
+u_hat  <-  y - l_hat
+v_hatd <-  v_hat * d
+
+
+psi_a <- -v_hat * v_hat
+psi_b <- v_hat * u_hat
+
+
+theta = -mean(psi_b) / mean(psi_a)
+
+print(paste0('Treatment effect estimate: ', theta))
+```
+
+
+```{r}
+# variance calc
+
+psi <- psi_a * theta + psi_b
+
+# note that when applying cross fitting, the scaling factor is n_obs, otherwise = test sample size
+var_scaling_factor <- n_obs 
+
+J <- mean(psi_a)
+
+sigma2_hat <- mean(psi^2) / (J^2) / var_scaling_factor
+
+std_err <- sqrt(sigma2_hat)
+
+print(paste0('Standard error: ', std_err))
+```

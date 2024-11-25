@@ -5,14 +5,19 @@ output:
     df_print: paged
 ---
 
+\
+
 If we do a little experiment to use the barebone models from mlr3 to replicate what DML has done , where we use
 
 * logistic regression for predicting whether a customer is eligible for 401(k)
-* a linear model (which should get the same result as plain OLS if used standalone) for estimating the treatment parameter
+* a linear model (which should get the same result as plain OLS if used standalone, with the same specification and sampling) for estimating the treatment parameter
 
 For simplicity, we set n_fold = 1 and apply_cross_fitting = FALSE for DML in this notebook as proof of concept
 
-## Library & setup
+\
+\
+
+### Library & setup
 
 ```{r}
 library(DoubleML)
@@ -34,9 +39,10 @@ linear_classification = lrn("classif.log_reg")  # For m(X): E[D | X]
 
 ```
 
+\
+\
 
-
-## Fitting with DML
+### Fitting with DML
 
 ```{r}
 
@@ -59,9 +65,10 @@ dml_plr_linear$summary()
 
 ```
 
+\
+\
 
-
-## Replicating DML with mlr3 only
+### Replicating DML with mlr3 only
 
 Reference - GitHub repo
 
@@ -90,8 +97,9 @@ test_ids <- list(seq(1, dim(data)[1]))
 
 ```
 
+\
 
-### Train the regression model
+#### *Train the regression model*
 
 ```{r}
 
@@ -123,8 +131,9 @@ l_hat[1:10]
 
 ```
 
+\
 
-### Train the classification model
+#### *Train the classification model*
 
 ```{r}
 
@@ -157,6 +166,9 @@ m_hat <- as.data.table( resampling_pred_cls$prediction()) %>% select(`prob.1`) %
 m_hat[1:10]
 
 ```
+
+\
+
 ### Compose required stats
 
 ```{r}

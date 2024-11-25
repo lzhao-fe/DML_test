@@ -1,0 +1,156 @@
+---
+title: "04. Cross-fitting"
+output:
+  html_document:
+    df_print: paged
+---
+\
+
+This notebook keeps using the Partially linear model (PLR) with linear model as the regression algorithm and logistic model as the classification algorithm and explores different settings for n_fold and cross-fitting application.
+
+With the current data and model specification, sampling can affect coefficient and variance, with bigger difference observed when switching on/ off the cross-fitting.
+
+\
+
+### Setup
+
+```{r}
+library(DoubleML)
+library(mlr3)
+library(mlr3learners)
+library(ggplot2)
+
+# Set the logging threshold to "warn" to suppress info messages
+lgr::get_logger("mlr3")$set_threshold("warn")
+
+# Prepare the data
+data = fetch_401k(return_type = "data.table")
+features_base = c("age", "inc", "educ", "fsize", "marr", "twoearn", "db", "pira", "hown")
+data_dml_base = DoubleMLData$new(data, y_col = "net_tfa", d_cols = "e401", x_cols = features_base)
+
+# Define linear regression learners for nuisance functions
+linear_regression = lrn("regr.lm")       
+linear_classification = lrn("classif.log_reg")  
+```
+
+\
+
+### Fitting
+
+```{r}
+
+# Define a helper function
+
+dml_n_fold <- function(
+  data_input,
+  regr_model,
+  cls_model,
+  n_fold_,
+  apply_cross_fitting_,
+  output_obj
+  
+) {
+  
+  set.seed(123)
+  
+  dml_learner <- DoubleMLPLR$new(
+    data_input,
+    ml_l = regr_model,    # Outcome nuisance function
+    ml_m = cls_model, # Treatment nuisance function
+    n_folds = n_fold_,                 # No folds (use entire data)
+    apply_cross_fitting = apply_cross_fitting_  
+  )
+  
+  
+  # Fit the model
+  dml_learner$fit()
+  
+  # Update results
+  output_obj[['n_fold']] <- append(output_obj[['n_fold']], n_fold_)
+  output_obj[['cross_fitting']] <- append(output_obj[['cross_fitting']], as.character(apply_cross_fitting_))
+  output_obj[['estimate']] <- append(output_obj[['estimate']], dml_learner$coef)
+  output_obj[['std. error']] <- append(output_obj[['std. error']], dml_learner$se)
+  output_obj[['lower']] <- append(output_obj[['lower']], dml_learner$confint()[1])
+  output_obj[['upper']] <- append(output_obj[['upper']], dml_learner$confint()[2])
+  
+  return(output_obj)
+  
+}
+
+
+
+
+# test 11 settings, where
+# when n_fold = 1, it cross-fitting is trivial
+# when n_fold = 2, we can either use or not use cross-fitting
+# when n_fold > 2, can only use cross-fitting
+
+n_folds_setting <- c(1, 2, seq(2, 10))
+cross_fit_setting <- c(FALSE, FALSE, rep(TRUE, 9))
+
+
+# initialise result collector
+fit_result <- list(
+  'n_fold' = integer(0),
+  'cross_fitting' = character(0),
+  'estimate' = numeric(0),
+  'std. error' = numeric(0),
+  'lower' = numeric(0),
+  'upper' = numeric(0)
+)
+
+
+# fit
+for (index_ in 1:length(n_folds_setting)){
+  
+  
+  fit_result <- dml_n_fold(
+    data_input = data_dml_base,
+    regr_model = linear_regression,
+    cls_model = linear_classification,
+    n_fold_ = n_folds_setting[index_],
+    apply_cross_fitting_ = cross_fit_setting[index_],
+    output_obj = fit_result
+  )
+  
+  
+}
+
+
+# clean up result
+
+fit_result <- data.frame(fit_result)
+fit_result
+```
+
+\
+
+### Plot
+
+```{r}
+# Create the plot
+g_ci <- ggplot(fit_result, aes(x = factor(n_fold), y = estimate, color = cross_fitting, group = cross_fitting)) +
+  geom_point(position = position_dodge(width = 0.4), size = 3) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), position = position_dodge(width = 0.4), width = 0.2) +
+  geom_hline(yintercept = 0, color = "grey", linetype = "dashed")+
+  ggtitle("Coefficients and 0.95 Confidence Interval with PLR") +  # Set the title as the y-axis label 
+  labs(
+    x = "n_fold",
+    color = "Cross Fitting",
+    subtitle = "Linear regression model and logistic classifier"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12, angle = 0, hjust = 0.5),  # Horizontal tick marks
+    axis.title.x = element_text(size = 14),  # Larger x-axis label
+    axis.title.y = element_blank(),  # Remove the y-axis label
+    legend.position = "bottom",  # Move the legend to the bottom
+    text = element_text(size = 14),  # Adjust text sizes for the overall plot
+    plot.title = element_text(hjust = 0.5), # put the title in centre
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+
+# Display the plot
+g_ci
+```
+
