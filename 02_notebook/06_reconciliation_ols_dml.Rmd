@@ -215,3 +215,100 @@ se_beta <- sqrt(sigma_squared * XtX_inv[1, 1])
 se_beta
 ```
 
+
+\
+
+### Simulation - large sample with homoskedastic error
+
+```{r}
+
+set.seed(123) # For reproducibility
+
+# Generate data
+n <- 5000000  # Sample size
+p <- 5     # Number of covariates
+
+
+
+# Covariates (features)
+X <- matrix(rnorm(n * p), n, p)
+colnames(X) <- paste0("X", 1:p)
+
+
+# Coefficients
+beta <- rnorm(p)         # Coefficients for covariates
+gamma <- rnorm(p)        # Coefficients for treatment model
+theta <- 2               # True treatment effect
+
+
+# Treatment and Outcome
+D <- X %*% gamma + rnorm(n)  # Treatment
+Y <- D * theta + X %*% beta + rnorm(n)  # Outcome
+
+
+# Combine into a data frame
+data <- data.frame(Y = Y, D = D, X)
+
+
+# # OLS Regression
+# ols_model <- lm(Y ~ D + ., data = data)
+# ols_summary <- summary(ols_model)
+
+
+
+# with OLS (implemented with lmr3 to avoid precision difference)
+# --------------------------------------------------------------
+ols_linear <- lrn('regr.lm')
+task_ols <- TaskRegr$new(
+  id = 'ols', 
+  backend = data,  # remember to remove the treatment variable
+  target = "Y"
+)
+
+# Train the model
+ols_linear$train(task_ols)
+
+
+# Extract the fitted model (lm object)
+fitted_model <- ols_linear$model
+
+# Summarize the fitted model to get standard errors
+model_summary <- summary(fitted_model)
+
+# Extract standard error for the treatment coefficient (D)
+theta_treatment <-  model_summary$coefficients["D", "Estimate"]
+se_treatment <- model_summary$coefficients["D", "Std. Error"]
+
+#print(model_summary$coefficients)
+
+
+
+
+
+# DML
+# --------------------------------------------------------------
+
+# Define task
+dml_data <- DoubleMLData$new(data, y_col = "Y", d_cols = "D", x_cols = colnames(X))
+
+# Define linear learners for DML
+linear_regression <- lrn("regr.lm")       
+linear_classification <- lrn("regr.lm")  
+
+
+
+# DML Model
+dml_model <- DoubleMLPLR$new(dml_data, ml_l = linear_regression, ml_m = linear_classification, n_fold = 1, apply_cross_fitting = FALSE)
+dml_model$fit()
+
+
+
+
+# Results
+
+data.frame('Model' = c('OLS', 'DML'),
+           'Theta' = c(theta_treatment, dml_model$coef[['D']]),
+           'SE' = c(se_treatment, dml_model$se[['D']])) 
+
+```
+

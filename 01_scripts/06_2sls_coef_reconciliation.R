@@ -1,12 +1,10 @@
 # 06 2SLS and DML
 
-
-
-# Load necessary libraries
-library(DoubleML)
-library(mlr3)
-library(mlr3learners)
-
+# Define variables
+outcome <- "Y"            # Outcome variable
+treatment <- "D"          # Treatment variable
+covariates <- c("X1", "X2", "X3")  # Covariates
+data <- data.frame(Y = rnorm(100), D = rbinom(100, 1, 0.5), X1 = rnorm(100), X2 = rnorm(100), X3 = rnorm(100))
 
 data <- fetch_401k(return_type = "data.table")
 features_base <- c("age", "inc", "educ", "fsize", "marr", "twoearn", "db", "pira", "hown")
@@ -15,7 +13,10 @@ treatment_var <- 'e401'
 
 
 
-
+# Load necessary libraries
+library(DoubleML)
+library(mlr3)
+library(mlr3learners)
 
 # Create the DoubleML dataset
 data_dml_base = DoubleMLData$new(
@@ -81,6 +82,26 @@ resampling_pred_regr <- resample(
 
 
 
+
+# -------------
+# Extract the stored models from the resampling result
+
+# Loop through each model to extract coefficients and standard errors
+for (i in seq_along(models)) {
+  regr_model <- resampling_pred_regr$learners[[i]]$model
+  regr_summary <- summary(regr_model)
+  
+  # Store coefficients and standard errors
+  #coefficients_list[[i]] <- summary_model$coefficients[, "Estimate"]
+  #se_list[[i]] <- summary_model$coefficients[, "Std. Error"]
+}
+
+
+
+outcome_model$coefficients - regr_summary$coefficients[, 'Estimate'][c('(Intercept)' , features_base)]
+
+
+
 # classification
 
 task_cls = TaskRegr$new(
@@ -105,6 +126,20 @@ resampling_pred_cls <- resample(
   store_models = TRUE
 )
 
+
+
+# Loop through each model to extract coefficients and standard errors
+for (i in seq_along(models)) {
+  cls_model <- resampling_pred_cls$learners[[i]]$model
+  cls_summary <- summary(cls_model)
+  
+  # Store coefficients and standard errors
+  #coefficients_list[[i]] <- summary_model$coefficients[, "Estimate"]
+  #se_list[[i]] <- summary_model$coefficients[, "Std. Error"]
+}
+
+cls_summary$coefficients[, 'Estimate'][c('(Intercept)' , features_base)]
+
 # ---------------
 l_hat <- resampling_pred_regr$prediction()$response
 m_hat <- resampling_pred_cls$prediction()$response
@@ -115,7 +150,7 @@ y <- data$net_tfa
 
 v_hat  <-  d - m_hat
 u_hat  <-  y - l_hat
-v_hatd <-  v_hat * d
+#v_hatd <-  v_hat * d
 
 
 psi_a <- -v_hat * v_hat
@@ -127,7 +162,7 @@ theta = -mean(psi_b) / mean(psi_a)
 print(paste0('Treatment effect estimate: ', theta))
 
 
-psi <- psi_a * theta + psi_b
+psi <- psi_a * theta + psi_b #  psi = (psi_b -v_hat * v_hat * theta) = psi_a * theta + psi_b
 
 var_scaling_factor <- length(test_ids[[1]])
 
@@ -142,13 +177,6 @@ print(paste0('Standard error: ', std_err))
 
 
 # //////
-
-
-
-
-
-
-
 
 # Step 1: Residualize Y (outcome)
 outcome_formula <- as.formula(paste(outcome_var, "~", paste(features_base, collapse = "+")))
@@ -167,16 +195,30 @@ summary(orthogonal_ols)
 
 
 
-# Extract residuals from the second stage regression
-residuals_2nd_stage <- residuals(orthogonal_ols)
+# manually replicate the standard error for 2SLS
 
-# Calculate the variance of the residuals
-sigma_squared <- sum(residuals_2nd_stage^2) / (length(residuals_2nd_stage) - 1)
+residuals_orthogonal <- residuals(orthogonal_ols)
+sigma_squared <- sum(residuals_orthogonal^2) / (length(residuals_orthogonal) - 1)
 
-# Calculate the standard error of the coefficient
-X <- model.matrix(orthogonal_ols)
-XtX_inv <- solve(t(X) %*% X)
-se_beta <- sqrt(sigma_squared * XtX_inv[1, 1])
 
-# Print the standard error
-se_beta
+# Compute the Variance of Residualized D
+var_residual_d <- var(residual_d)
+
+# 
+n <- nrow(data)
+var_beta <- sigma_squared / (n * var_residual_d)
+
+#
+
+se_beta <- sqrt(var_beta)
+
+# residual_d ~ v_hat
+sum(residual_d - v_hat)
+
+
+# confidence interval
+
+coef_orthogonal <- coef(orthogonal_ols)["residual_d"]
+critical_value <- qt(0.975, df = n - 1)
+ci_lower <- coef_orthogonal - critical_value * se_beta
+ci_upper <- coef_orthogonal + critical_value * se_beta

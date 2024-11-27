@@ -1850,6 +1850,103 @@ se_beta &lt;- sqrt(sigma_squared * XtX_inv[1, 1])
 # Print the standard error
 se_beta</code></pre>
 <pre><code>## [1] 1249.383</code></pre>
+<p><br />
+</p>
+</div>
+</div>
+<div id="simulation---large-sample-with-homoskedastic-error" class="section level3">
+<h3>Simulation - large sample with homoskedastic error</h3>
+<pre class="r"><code>set.seed(123) # For reproducibility
+
+# Generate data
+n &lt;- 5000000  # Sample size
+p &lt;- 5     # Number of covariates
+
+
+
+# Covariates (features)
+X &lt;- matrix(rnorm(n * p), n, p)
+colnames(X) &lt;- paste0(&quot;X&quot;, 1:p)
+
+
+# Coefficients
+beta &lt;- rnorm(p)         # Coefficients for covariates
+gamma &lt;- rnorm(p)        # Coefficients for treatment model
+theta &lt;- 2               # True treatment effect
+
+
+# Treatment and Outcome
+D &lt;- X %*% gamma + rnorm(n)  # Treatment
+Y &lt;- D * theta + X %*% beta + rnorm(n)  # Outcome
+
+
+# Combine into a data frame
+data &lt;- data.frame(Y = Y, D = D, X)
+
+
+# # OLS Regression
+# ols_model &lt;- lm(Y ~ D + ., data = data)
+# ols_summary &lt;- summary(ols_model)
+
+
+
+# with OLS (implemented with lmr3 to avoid precision difference)
+# --------------------------------------------------------------
+ols_linear &lt;- lrn(&#39;regr.lm&#39;)
+task_ols &lt;- TaskRegr$new(
+  id = &#39;ols&#39;, 
+  backend = data,  # remember to remove the treatment variable
+  target = &quot;Y&quot;
+)
+
+# Train the model
+ols_linear$train(task_ols)
+
+
+# Extract the fitted model (lm object)
+fitted_model &lt;- ols_linear$model
+
+# Summarize the fitted model to get standard errors
+model_summary &lt;- summary(fitted_model)
+
+# Extract standard error for the treatment coefficient (D)
+theta_treatment &lt;-  model_summary$coefficients[&quot;D&quot;, &quot;Estimate&quot;]
+se_treatment &lt;- model_summary$coefficients[&quot;D&quot;, &quot;Std. Error&quot;]
+
+#print(model_summary$coefficients)
+
+
+
+
+
+# DML
+# --------------------------------------------------------------
+
+# Define task
+dml_data &lt;- DoubleMLData$new(data, y_col = &quot;Y&quot;, d_cols = &quot;D&quot;, x_cols = colnames(X))
+
+# Define linear learners for DML
+linear_regression &lt;- lrn(&quot;regr.lm&quot;)       
+linear_classification &lt;- lrn(&quot;regr.lm&quot;)  
+
+
+
+# DML Model
+dml_model &lt;- DoubleMLPLR$new(dml_data, ml_l = linear_regression, ml_m = linear_classification, n_fold = 1, apply_cross_fitting = FALSE)
+dml_model$fit()
+
+
+
+
+# Results
+
+data.frame(&#39;Model&#39; = c(&#39;OLS&#39;, &#39;DML&#39;),
+           &#39;Theta&#39; = c(theta_treatment, dml_model$coef[[&#39;D&#39;]]),
+           &#39;SE&#39; = c(se_treatment, dml_model$se[[&#39;D&#39;]])) </code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["Model"],"name":[1],"type":["chr"],"align":["left"]},{"label":["Theta"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["SE"],"name":[3],"type":["dbl"],"align":["right"]}],"data":[{"1":"OLS","2":"2.000037","3":"0.0004474471"},{"1":"DML","2":"2.000037","3":"0.0004475874"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
 </div>
 </div>
 
